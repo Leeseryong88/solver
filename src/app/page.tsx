@@ -249,16 +249,26 @@ export default function Home() {
     
     if (!ctx) return;
     
-    // 원본 이미지 다시 그리기 (배경 초기화)
+    // 캔버스 초기화
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+    
+    // 원본 이미지 전체 그리기
     ctx.drawImage(imageRef.current, 0, 0, canvas.width, canvas.height);
     
-    // 전체 화면에 반투명 오버레이 추가
+    // 선택 영역 외부에만 반투명 오버레이 적용 (4개 영역으로 나누어 그림)
     ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
     
-    // 선택 영역은 완전 투명하게 (오버레이 제거)
-    ctx.clearRect(cropArea.x, cropArea.y, cropArea.width, cropArea.height);
+    // 상단 영역
+    ctx.fillRect(0, 0, canvas.width, cropArea.y);
+    
+    // 하단 영역
+    ctx.fillRect(0, cropArea.y + cropArea.height, canvas.width, canvas.height - (cropArea.y + cropArea.height));
+    
+    // 좌측 영역
+    ctx.fillRect(0, cropArea.y, cropArea.x, cropArea.height);
+    
+    // 우측 영역
+    ctx.fillRect(cropArea.x + cropArea.width, cropArea.y, canvas.width - (cropArea.x + cropArea.width), cropArea.height);
     
     // 크롭 영역에 테두리 추가
     ctx.strokeStyle = '#2563eb';

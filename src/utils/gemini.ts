@@ -1,5 +1,4 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import { marked } from 'marked';
 
 // Gemini API 키 설정
 const apiKey = "AIzaSyA24tR4uwVI1lTnvm0yxvDZguaX2t2xx48";
@@ -104,9 +103,6 @@ export async function analyzeProblemImage(imageBase64: string): Promise<Formatte
 
 ## 신뢰도
 [확실한 답변/가능성 높은 답변/가능한 답변/확신할 수 없음]
-
-## 대안적 접근
-[다른 방법으로 문제를 해결했을 때의 결과, 필요한 경우]
 
 ## 참고 사항
 [풀이에 사용된 공식, 이론, 개념 등의 추가 설명]

@@ -208,12 +208,12 @@ export default function Home() {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         ctx.drawImage(img, 0, 0, drawWidth, drawHeight);
         
-        // 기본 크롭 영역 설정 (이미지 중앙 70%)
+        // 기본 크롭 영역 설정 (이미지 중앙 80%)
         setCropArea({
-          x: drawWidth * 0.15,
-          y: drawHeight * 0.15,
-          width: drawWidth * 0.7,
-          height: drawHeight * 0.7
+          x: drawWidth * 0.1,
+          y: drawHeight * 0.1,
+          width: drawWidth * 0.8,
+          height: drawHeight * 0.8
         });
         
         // 이미지 참조 저장

@@ -19,12 +19,53 @@ export default function Home() {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    // 파일 크기 확인 (10MB 제한)
+    if (file.size > 10 * 1024 * 1024) {
+      setError("파일 크기가 너무 큽니다. 10MB 이하의 이미지를 업로드해주세요.");
+      return;
+    }
+
     const reader = new FileReader();
     reader.onload = (event) => {
-      setImage(event.target?.result as string);
-      setSolution(null);
-      setError(null);
+      const imageData = event.target?.result as string;
+      
+      // 이미지 압축 및 크기 조정
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        
+        // 최대 크기 설정 (너비/높이 1200px 제한)
+        let width = img.width;
+        let height = img.height;
+        const maxDimension = 1200;
+        
+        if (width > maxDimension || height > maxDimension) {
+          if (width > height) {
+            height = Math.floor(height * (maxDimension / width));
+            width = maxDimension;
+          } else {
+            width = Math.floor(width * (maxDimension / height));
+            height = maxDimension;
+          }
+        }
+        
+        canvas.width = width;
+        canvas.height = height;
+        
+        if (!ctx) return;
+        ctx.drawImage(img, 0, 0, width, height);
+        
+        // 압축된 이미지 데이터 (품질 0.85)
+        const compressedImage = canvas.toDataURL('image/jpeg', 0.85);
+        setImage(compressedImage);
+        setSolution(null);
+        setError(null);
+      };
+      
+      img.src = imageData;
     };
+    
     reader.onerror = () => {
       setError("이미지 로딩 중 오류가 발생했습니다.");
     };
@@ -61,17 +102,35 @@ export default function Home() {
     const canvas = canvasRef.current;
     
     // 비디오 크기에 맞게 캔버스 설정
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
+    const originalWidth = video.videoWidth;
+    const originalHeight = video.videoHeight;
+    
+    // 최대 크기 설정 (너비/높이 1200px 제한)
+    let width = originalWidth;
+    let height = originalHeight;
+    const maxDimension = 1200;
+    
+    if (width > maxDimension || height > maxDimension) {
+      if (width > height) {
+        height = Math.floor(height * (maxDimension / width));
+        width = maxDimension;
+      } else {
+        width = Math.floor(width * (maxDimension / height));
+        height = maxDimension;
+      }
+    }
+    
+    canvas.width = width;
+    canvas.height = height;
     
     // 캔버스에 현재 비디오 프레임 그리기
     const context = canvas.getContext('2d');
     if (!context) return;
     
-    context.drawImage(video, 0, 0, canvas.width, canvas.height);
+    context.drawImage(video, 0, 0, width, height);
     
-    // 이미지 데이터 가져오기
-    const imageData = canvas.toDataURL('image/jpeg');
+    // 이미지 데이터 가져오기 (압축 품질 0.85)
+    const imageData = canvas.toDataURL('image/jpeg', 0.85);
     setImage(imageData);
     
     // 카메라 스트림 정지

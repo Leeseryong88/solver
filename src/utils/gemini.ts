@@ -53,10 +53,21 @@ export async function analyzeProblemImage(imageBase64: string): Promise<Formatte
       throw new Error("Gemini API 키가 설정되지 않았습니다. .env.local 파일에 NEXT_PUBLIC_GEMINI_API_KEY를 설정해주세요.");
     }
 
+    // 이미지 데이터 크기 확인 (대략 1.33배)
+    const base64Data = imageBase64.replace(/^data:image\/(png|jpeg|jpg);base64,/, "");
+    const imageSize = Math.round((base64Data.length * 3) / 4);
+    
+    // 이미지 크기가 10MB를 초과하는 경우
+    if (imageSize > 10 * 1024 * 1024) {
+      return {
+        html: "<div class='text-red-600'>이미지 크기가 너무 큽니다. 더 작은 이미지를 사용해주세요.</div>"
+      };
+    }
+
     // 이미지를 Gemini API 형식으로 변환
     const imageData = {
       inlineData: {
-        data: imageBase64.replace(/^data:image\/(png|jpeg|jpg);base64,/, ""),
+        data: base64Data,
         mimeType: "image/jpeg",
       },
     };
@@ -118,27 +129,63 @@ export async function analyzeProblemImage(imageBase64: string): Promise<Formatte
     let result;
     let retries = 3; // 최대 재시도 횟수
     let delay = 2000; // 처음 대기 시간 (2초)
+    
+    // 타임아웃 설정을 위한 Promise
+    const timeoutPromise = (ms: number) => new Promise((_, reject) => 
+      setTimeout(() => reject(new Error("Gemini API 요청 시간이 초과되었습니다.")), ms)
+    );
 
     while (retries > 0) {
       try {
-        result = await model.generateContent([prompt, imageData]);
+        // API 요청에 60초 타임아웃 설정
+        const apiPromise = model.generateContent([prompt, imageData]);
+        const raceResult = await Promise.race([
+          apiPromise,
+          timeoutPromise(60000) // 60초 타임아웃
+        ]);
+        
+        // 타임아웃 Promise는 항상 reject되므로, 여기에 도달했다면 apiPromise가 완료된 것임
+        result = await apiPromise;
         break; // 성공하면 반복문 종료
       } catch (error: unknown) {
         // 타입 가드를 사용하여 error 객체 처리
         const errorObj = error as { message?: string };
-        // 서비스 과부하 오류인 경우만 재시도
-        if (errorObj.message && 
-            (errorObj.message.includes('503 Service Unavailable') || 
-             errorObj.message.includes('overloaded'))) {
-          retries--;
-          if (retries === 0) throw error; // 모든 재시도 실패시 오류 발생
-          
-          console.log(`Gemini 서버 과부하. ${delay/1000}초 후 재시도 중... (남은 시도: ${retries})`);
-          await new Promise(r => setTimeout(r, delay));
-          delay *= 2; // 지수 백오프: 다음 재시도는 더 오래 기다림
+        console.error("Gemini API 오류:", errorObj.message);
+        
+        // 오류 유형에 따른 처리
+        if (errorObj.message) {
+          // 서버 과부하 또는 속도 제한 오류
+          if (errorObj.message.includes('503 Service Unavailable') || 
+              errorObj.message.includes('overloaded') ||
+              errorObj.message.includes('rate limit')) {
+            retries--;
+            if (retries === 0) {
+              return {
+                html: "<div class='text-red-600'>서버과부하로 잠시후 다시 시도해주시기 바랍니다.</div>"
+              };
+            }
+            
+            console.log(`Gemini 서버 과부하. ${delay/1000}초 후 재시도 중... (남은 시도: ${retries})`);
+            await new Promise(r => setTimeout(r, delay));
+            delay *= 2; // 지수 백오프: 다음 재시도는 더 오래 기다림
+          } 
+          // 타임아웃 오류
+          else if (errorObj.message.includes('시간이 초과')) {
+            return {
+              html: "<div class='text-red-600'>요청 처리 시간이 너무 깁니다. 다른 이미지를 사용해보세요.</div>"
+            };
+          }
+          // 기타 오류
+          else {
+            return {
+              html: "<div class='text-red-600'>서버과부하로 잠시후 다시 시도해주시기 바랍니다.</div>"
+            };
+          }
         } else {
-          // 다른 오류는 바로 던짐
-          throw error;
+          // 알 수 없는 오류
+          return {
+            html: "<div class='text-red-600'>알 수 없는 오류가 발생했습니다. 다시 시도해주세요.</div>"
+          };
         }
       }
     }

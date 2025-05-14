@@ -114,8 +114,39 @@ export async function analyzeProblemImage(imageBase64: string): Promise<Formatte
 
 답변은 한국어로 제공하시고, 최대한 정확하고 상세하게 설명해주세요.`;
     
-    // Gemini API 호출
-    const result = await model.generateContent([prompt, imageData]);
+    // Gemini API 호출 (재시도 로직 추가)
+    let result;
+    let retries = 3; // 최대 재시도 횟수
+    let delay = 2000; // 처음 대기 시간 (2초)
+
+    while (retries > 0) {
+      try {
+        result = await model.generateContent([prompt, imageData]);
+        break; // 성공하면 반복문 종료
+      } catch (error: unknown) {
+        // 타입 가드를 사용하여 error 객체 처리
+        const errorObj = error as { message?: string };
+        // 서비스 과부하 오류인 경우만 재시도
+        if (errorObj.message && 
+            (errorObj.message.includes('503 Service Unavailable') || 
+             errorObj.message.includes('overloaded'))) {
+          retries--;
+          if (retries === 0) throw error; // 모든 재시도 실패시 오류 발생
+          
+          console.log(`Gemini 서버 과부하. ${delay/1000}초 후 재시도 중... (남은 시도: ${retries})`);
+          await new Promise(r => setTimeout(r, delay));
+          delay *= 2; // 지수 백오프: 다음 재시도는 더 오래 기다림
+        } else {
+          // 다른 오류는 바로 던짐
+          throw error;
+        }
+      }
+    }
+
+    if (!result) {
+      throw new Error("Gemini API 결과를 받아오지 못했습니다.");
+    }
+
     const response = await result.response;
     const rawText = response.text();
     

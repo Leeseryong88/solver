@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import Image from "next/image";
 import { FormattedSolution } from "@/utils/gemini";
 
@@ -10,9 +10,15 @@ export default function Home() {
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [usingCamera, setUsingCamera] = useState<boolean>(false);
+  const [isEditing, setIsEditing] = useState<boolean>(false); // 이미지 편집 모드
+  const [cropArea, setCropArea] = useState({ x: 0, y: 0, width: 0, height: 0 }); // 크롭 영역
+  const [startPoint, setStartPoint] = useState({ x: 0, y: 0 }); // 드래그 시작점
+  const [isDragging, setIsDragging] = useState(false); // 드래그 중 여부
   const fileInputRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const editCanvasRef = useRef<HTMLCanvasElement>(null);
+  const imageRef = useRef<HTMLImageElement>(null);
 
   // 이미지 업로드 처리
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -140,6 +146,189 @@ export default function Home() {
     }
     
     setUsingCamera(false);
+    
+    // 이미지 편집 모드 활성화
+    setIsEditing(true);
+  };
+
+  // 이미지 편집 관련 함수들
+  useEffect(() => {
+    if (isEditing && image && editCanvasRef.current) {
+      const canvas = editCanvasRef.current;
+      const ctx = canvas.getContext('2d');
+      
+      if (!ctx) return;
+      
+      // 이미지 로드
+      const img = new window.Image();
+      img.onload = () => {
+        // 캔버스 크기 설정
+        const containerWidth = canvas.parentElement?.clientWidth || img.width;
+        const containerHeight = canvas.parentElement?.clientHeight || img.height;
+        
+        // 이미지와 컨테이너 비율 계산
+        const imgRatio = img.width / img.height;
+        const containerRatio = containerWidth / containerHeight;
+        
+        let drawWidth, drawHeight;
+        
+        if (imgRatio > containerRatio) {
+          // 이미지가 더 넓은 경우
+          drawWidth = containerWidth;
+          drawHeight = containerWidth / imgRatio;
+        } else {
+          // 이미지가 더 높은 경우
+          drawHeight = containerHeight;
+          drawWidth = containerHeight * imgRatio;
+        }
+        
+        canvas.width = drawWidth;
+        canvas.height = drawHeight;
+        
+        // 이미지 그리기
+        ctx.drawImage(img, 0, 0, drawWidth, drawHeight);
+        
+        // 기본 크롭 영역 설정 (이미지 중앙 70%)
+        setCropArea({
+          x: drawWidth * 0.15,
+          y: drawHeight * 0.15,
+          width: drawWidth * 0.7,
+          height: drawHeight * 0.7
+        });
+        
+        // 이미지 참조 저장
+        imageRef.current = img;
+      };
+      
+      img.src = image;
+    }
+  }, [isEditing, image]);
+  
+  // 캔버스에 크롭 영역 그리기
+  useEffect(() => {
+    if (isEditing && editCanvasRef.current && cropArea.width > 0) {
+      const canvas = editCanvasRef.current;
+      const ctx = canvas.getContext('2d');
+      
+      if (!ctx || !imageRef.current) return;
+      
+      // 캔버스 초기화
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      
+      // 이미지 다시 그리기
+      ctx.drawImage(imageRef.current, 0, 0, canvas.width, canvas.height);
+      
+      // 전체 화면에 어두운 오버레이 추가
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      
+      // 선택 영역은 오버레이에서 제외
+      ctx.clearRect(cropArea.x, cropArea.y, cropArea.width, cropArea.height);
+      
+      // 크롭 영역에 테두리 추가
+      ctx.strokeStyle = '#2563eb'; // 파란색 테두리
+      ctx.lineWidth = 2;
+      ctx.strokeRect(cropArea.x, cropArea.y, cropArea.width, cropArea.height);
+      
+      // 코너 핸들 추가
+      const handleSize = 8;
+      ctx.fillStyle = 'white';
+      
+      // 좌상단
+      ctx.fillRect(cropArea.x - handleSize/2, cropArea.y - handleSize/2, handleSize, handleSize);
+      // 우상단
+      ctx.fillRect(cropArea.x + cropArea.width - handleSize/2, cropArea.y - handleSize/2, handleSize, handleSize);
+      // 좌하단
+      ctx.fillRect(cropArea.x - handleSize/2, cropArea.y + cropArea.height - handleSize/2, handleSize, handleSize);
+      // 우하단
+      ctx.fillRect(cropArea.x + cropArea.width - handleSize/2, cropArea.y + cropArea.height - handleSize/2, handleSize, handleSize);
+    }
+  }, [isEditing, cropArea]);
+  
+  // 마우스 이벤트 핸들러
+  const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (!editCanvasRef.current) return;
+    
+    const canvas = editCanvasRef.current;
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    
+    setStartPoint({ x, y });
+    setIsDragging(true);
+  };
+  
+  const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (!isDragging || !editCanvasRef.current) return;
+    
+    const canvas = editCanvasRef.current;
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    
+    // 시작점과 현재 위치의 차이 계산
+    const dx = x - startPoint.x;
+    const dy = y - startPoint.y;
+    
+    // 새 영역 계산
+    const newX = Math.max(0, Math.min(cropArea.x + dx, canvas.width - cropArea.width));
+    const newY = Math.max(0, Math.min(cropArea.y + dy, canvas.height - cropArea.height));
+    
+    setCropArea(prev => ({
+      ...prev,
+      x: newX,
+      y: newY
+    }));
+    
+    setStartPoint({ x, y });
+  };
+  
+  const handleMouseUp = () => {
+    setIsDragging(false);
+  };
+  
+  // 편집 완료 처리
+  const finishEditing = () => {
+    if (!editCanvasRef.current || !imageRef.current) return;
+    
+    const canvas = editCanvasRef.current;
+    const img = imageRef.current;
+    
+    // 원본 이미지에서의 비율 계산
+    const scaleX = img.width / canvas.width;
+    const scaleY = img.height / canvas.height;
+    
+    // 원본 이미지에서의 자르기 영역 계산
+    const srcX = cropArea.x * scaleX;
+    const srcY = cropArea.y * scaleY;
+    const srcWidth = cropArea.width * scaleX;
+    const srcHeight = cropArea.height * scaleY;
+    
+    // 임시 캔버스에 잘라낸 이미지 그리기
+    const tempCanvas = document.createElement('canvas');
+    tempCanvas.width = srcWidth;
+    tempCanvas.height = srcHeight;
+    
+    const ctx = tempCanvas.getContext('2d');
+    if (!ctx) return;
+    
+    ctx.drawImage(
+      img,
+      srcX, srcY, srcWidth, srcHeight, // 소스 영역
+      0, 0, srcWidth, srcHeight        // 대상 영역
+    );
+    
+    // 잘라낸 이미지를 base64로 변환
+    const croppedImage = tempCanvas.toDataURL('image/jpeg', 0.85);
+    setImage(croppedImage);
+    
+    // 편집 모드 종료
+    setIsEditing(false);
+  };
+  
+  // 편집 취소
+  const cancelEditing = () => {
+    setIsEditing(false);
   };
 
   // 카메라 취소
@@ -239,9 +428,44 @@ export default function Home() {
             <canvas ref={canvasRef} className="hidden" />
           </div>
         )}
+        
+        {/* 이미지 편집 뷰 */}
+        {isEditing && image && (
+          <div className="fixed inset-0 bg-black z-20 flex flex-col">
+            <div className="flex-1 relative">
+              <canvas 
+                ref={editCanvasRef}
+                className="absolute inset-0 w-full h-full object-contain"
+                onMouseDown={handleMouseDown}
+                onMouseMove={handleMouseMove}
+                onMouseUp={handleMouseUp}
+                onMouseLeave={handleMouseUp}
+              />
+              <div className="absolute bottom-4 left-4 right-4 flex justify-center gap-4">
+                <p className="text-white text-sm mb-2 text-center">
+                  선택 영역을 드래그하여 문제 부분만 선택해주세요
+                </p>
+              </div>
+            </div>
+            <div className="bg-black p-4 flex justify-center gap-4">
+              <button
+                onClick={cancelEditing}
+                className="flex-1 py-3 rounded-lg bg-red-500 text-white font-medium"
+              >
+                취소
+              </button>
+              <button
+                onClick={finishEditing}
+                className="flex-1 py-3 rounded-lg bg-blue-600 text-white font-medium"
+              >
+                적용
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* 이미지 미리보기 및 분석 버튼 */}
-        {image && (
+        {!isEditing && image && (
           <div className="w-full bg-white rounded-xl shadow-sm overflow-hidden mb-4">
             <div className="p-4">
               <p className="text-sm font-medium text-gray-700 mb-2">미리보기</p>
@@ -282,7 +506,7 @@ export default function Home() {
         )}
 
         {/* 이미지가 없을 때 메인 버튼 영역 */}
-        {!image && !usingCamera && !solution && (
+        {!image && !usingCamera && !solution && !isEditing && (
           <div className="w-full bg-white rounded-xl shadow-sm p-4 mb-4">
             <h2 className="text-base font-medium mb-3 text-gray-700">문제 이미지 선택</h2>
             <div className="flex flex-col gap-3">

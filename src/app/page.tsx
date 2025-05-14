@@ -162,35 +162,55 @@ export default function Home() {
       // 이미지 로드
       const img = new window.Image();
       img.onload = () => {
-        // 캔버스 크기 설정 - 브라우저 창 크기에 맞게 조정
-        const windowWidth = window.innerWidth;
-        const windowHeight = window.innerHeight * 0.8; // 하단 버튼 영역 제외
+        console.log("이미지 로드 완료:", img.width, img.height); // 디버깅용
         
-        // 이미지와 윈도우 비율 계산
-        const imgRatio = img.width / img.height;
-        const windowRatio = windowWidth / windowHeight;
+        // 브라우저 창 크기에 맞게 조정
+        const maxWidth = Math.min(window.innerWidth * 0.9, 800);
+        const maxHeight = window.innerHeight * 0.6;
         
+        // 이미지 비율 유지하면서 최대 크기 설정
         let drawWidth, drawHeight;
+        const imgRatio = img.width / img.height;
         
-        if (imgRatio > windowRatio) {
-          // 이미지가 더 넓은 경우
-          drawWidth = windowWidth * 0.9; // 약간의 여백
+        if (imgRatio > 1) {
+          // 가로가 더 긴 이미지
+          drawWidth = maxWidth;
           drawHeight = drawWidth / imgRatio;
+          
+          // 높이가 최대 높이를 초과하면 다시 조정
+          if (drawHeight > maxHeight) {
+            drawHeight = maxHeight;
+            drawWidth = drawHeight * imgRatio;
+          }
         } else {
-          // 이미지가 더 높은 경우
-          drawHeight = windowHeight * 0.9; // 약간의 여백
+          // 세로가 더 긴 이미지
+          drawHeight = maxHeight;
           drawWidth = drawHeight * imgRatio;
+          
+          // 너비가 최대 너비를 초과하면 다시 조정
+          if (drawWidth > maxWidth) {
+            drawWidth = maxWidth;
+            drawHeight = drawWidth / imgRatio;
+          }
         }
         
         // 캔버스 크기 설정
         canvas.width = drawWidth;
         canvas.height = drawHeight;
         
+        // 캔버스 스타일 설정 (직접 DOM 스타일 지정)
+        canvas.style.width = `${drawWidth}px`;
+        canvas.style.height = `${drawHeight}px`;
+        canvas.style.display = 'block';
+        canvas.style.backgroundColor = '#eee'; // 배경색 추가로 가시성 확인
+        
         // 캔버스 초기화
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
         
         // 이미지 그리기
         ctx.drawImage(img, 0, 0, drawWidth, drawHeight);
+        console.log("이미지 그리기 완료:", drawWidth, drawHeight); // 디버깅용
         
         // 기본 크롭 영역 설정 (이미지 중앙 70%)
         setCropArea({
@@ -204,14 +224,17 @@ export default function Home() {
         imageRef.current = img;
         
         // 크롭 영역 표시 함수 호출
-        drawCropOverlay();
+        setTimeout(() => {
+          drawCropOverlay();
+        }, 100);
       };
       
+      img.crossOrigin = "anonymous"; // CORS 오류 방지
       img.src = image;
       
       // 이미지 로드 오류 처리
-      img.onerror = () => {
-        console.error('이미지 로드 실패');
+      img.onerror = (e) => {
+        console.error('이미지 로드 실패', e);
         setError('이미지를 로드하는 데 실패했습니다.');
         setIsEditing(false);
       };
@@ -220,12 +243,17 @@ export default function Home() {
   
   // 크롭 오버레이 그리기 함수
   const drawCropOverlay = () => {
-    if (!editCanvasRef.current || !imageRef.current) return;
+    if (!editCanvasRef.current || !imageRef.current) {
+      console.error("캔버스 또는 이미지 참조 없음");
+      return;
+    }
     
     const canvas = editCanvasRef.current;
     const ctx = canvas.getContext('2d');
     
     if (!ctx) return;
+    
+    console.log("오버레이 그리기:", canvas.width, canvas.height); // 디버깅용
     
     // 캔버스에 이미지 다시 그리기
     ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -500,25 +528,27 @@ export default function Home() {
         {/* 이미지 편집 뷰 */}
         {isEditing && image && (
           <div className="fixed inset-0 bg-black z-20 flex flex-col">
-            <div className="flex-1 relative flex items-center justify-center">
-              <canvas 
-                ref={editCanvasRef}
-                className="max-w-full max-h-full object-contain"
-                onMouseDown={handleMouseDown}
-                onMouseMove={handleMouseMove}
-                onMouseUp={handleMouseUp}
-                onMouseLeave={handleMouseUp}
-                onTouchStart={handleTouchStart}
-                onTouchMove={handleTouchMove}
-                onTouchEnd={handleTouchEnd}
-              />
+            <div className="flex-1 flex items-center justify-center p-4">
+              <div className="relative bg-white rounded-lg overflow-hidden shadow-lg">
+                <canvas 
+                  ref={editCanvasRef}
+                  className="block"
+                  onMouseDown={handleMouseDown}
+                  onMouseMove={handleMouseMove}
+                  onMouseUp={handleMouseUp}
+                  onMouseLeave={handleMouseUp}
+                  onTouchStart={handleTouchStart}
+                  onTouchMove={handleTouchMove}
+                  onTouchEnd={handleTouchEnd}
+                />
+              </div>
             </div>
-            <div className="p-2 bg-black">
+            <div className="p-2 bg-gray-900">
               <p className="text-white text-sm mb-2 text-center">
                 선택 영역을 드래그하여 문제 부분만 선택해주세요
               </p>
             </div>
-            <div className="bg-black p-4 flex justify-center gap-4">
+            <div className="bg-gray-900 p-4 flex justify-center gap-4">
               <button
                 onClick={cancelEditing}
                 className="flex-1 py-3 rounded-lg bg-red-500 text-white font-medium"

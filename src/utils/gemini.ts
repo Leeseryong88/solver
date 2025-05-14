@@ -139,12 +139,14 @@ export async function analyzeProblemImage(imageBase64: string): Promise<Formatte
       try {
         // API 요청에 60초 타임아웃 설정
         const apiPromise = model.generateContent([prompt, imageData]);
-        const raceResult = await Promise.race([
-          apiPromise,
+        
+        // 타임아웃 처리
+        await Promise.race([
+          Promise.resolve(apiPromise),
           timeoutPromise(60000) // 60초 타임아웃
         ]);
         
-        // 타임아웃 Promise는 항상 reject되므로, 여기에 도달했다면 apiPromise가 완료된 것임
+        // 타임아웃이 발생하지 않았다면 API 결과를 사용
         result = await apiPromise;
         break; // 성공하면 반복문 종료
       } catch (error: unknown) {

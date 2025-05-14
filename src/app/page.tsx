@@ -46,7 +46,7 @@ export default function Home() {
         videoRef.current.srcObject = stream;
         videoRef.current.play();
       }
-    } catch (_error) {
+    } catch {
       setError("카메라 접근에 실패했습니다. 권한을 확인해주세요.");
       setUsingCamera(false);
     }
@@ -133,8 +133,8 @@ export default function Home() {
 
       const data = await response.json();
       setSolution(data.solution);
-    } catch (_error) {
-      console.error("문제 분석 중 오류:", _error);
+    } catch {
+      console.error("문제 분석 중 오류가 발생했습니다.");
       setError("문제 분석 중 오류가 발생했습니다. 다시 시도해주세요.");
     } finally {
       setLoading(false);

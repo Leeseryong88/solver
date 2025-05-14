@@ -170,7 +170,7 @@ export async function analyzeProblemImage(imageBase64: string): Promise<Formatte
   } catch (error) {
     console.error("Gemini API 호출 중 오류 발생:", error);
     return {
-      html: "<div class='text-red-600'>이미지 분석 중 오류가 발생했습니다. 다시 시도해주세요.</div>"
+      html: "<div class='text-red-600'>서버과부하로 잠시후 다시 시도해주시기 바랍니다.</div>"
     };
   }
 } 

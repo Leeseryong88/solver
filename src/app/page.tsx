@@ -2,10 +2,11 @@
 
 import { useState, useRef } from "react";
 import Image from "next/image";
+import { FormattedSolution } from "@/utils/gemini";
 
 export default function Home() {
   const [image, setImage] = useState<string | null>(null);
-  const [solution, setSolution] = useState<string | null>(null);
+  const [solution, setSolution] = useState<FormattedSolution | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [usingCamera, setUsingCamera] = useState<boolean>(false);
@@ -261,9 +262,19 @@ export default function Home() {
         {solution && (
           <div className="w-full bg-white rounded-xl shadow-sm p-4 mb-8">
             <h2 className="text-lg font-semibold mb-3">문제 해결 결과</h2>
-            <div className="prose prose-sm max-w-none whitespace-pre-wrap bg-gray-50 p-4 rounded-md text-sm">
-              {solution}
-            </div>
+            
+            {solution.problemType && (
+              <div className="mb-3">
+                <span className="text-gray-700 font-medium">문제 유형:</span> 
+                <span className="ml-2">{solution.problemType}</span>
+              </div>
+            )}
+            
+            <div 
+              className="prose prose-sm max-w-none bg-gray-50 p-4 rounded-md text-sm"
+              dangerouslySetInnerHTML={{ __html: solution.html }}
+            />
+            
             <div className="mt-4">
               <button
                 onClick={resetAll}

@@ -19,6 +19,7 @@ export default function Home() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const editCanvasRef = useRef<HTMLCanvasElement>(null);
   const imageRef = useRef<HTMLImageElement>(null);
+  const [resizeMode, setResizeMode] = useState<string | null>(null);
 
   // 이미지 업로드 처리
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -162,7 +163,7 @@ export default function Home() {
       // 이미지 로드
       const img = new window.Image();
       img.onload = () => {
-        console.log("이미지 로드 완료:", img.width, img.height); // 디버깅용
+        console.log("이미지 로드 완료:", img.width, img.height);
         
         // 브라우저 창 크기에 맞게 조정
         const maxWidth = Math.min(window.innerWidth * 0.9, 800);
@@ -198,19 +199,14 @@ export default function Home() {
         canvas.width = drawWidth;
         canvas.height = drawHeight;
         
-        // 캔버스 스타일 설정 (직접 DOM 스타일 지정)
+        // 캔버스 스타일 설정
         canvas.style.width = `${drawWidth}px`;
         canvas.style.height = `${drawHeight}px`;
         canvas.style.display = 'block';
-        canvas.style.backgroundColor = '#eee'; // 배경색 추가로 가시성 확인
         
-        // 캔버스 초기화
-        ctx.fillStyle = '#fff';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        
-        // 이미지 그리기
+        // 이미지 그리기 - 배경색 없이 이미지만 그리기
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
         ctx.drawImage(img, 0, 0, drawWidth, drawHeight);
-        console.log("이미지 그리기 완료:", drawWidth, drawHeight); // 디버깅용
         
         // 기본 크롭 영역 설정 (이미지 중앙 70%)
         setCropArea({
@@ -226,7 +222,7 @@ export default function Home() {
         // 크롭 영역 표시 함수 호출
         setTimeout(() => {
           drawCropOverlay();
-        }, 100);
+        }, 50);
       };
       
       img.crossOrigin = "anonymous"; // CORS 오류 방지
@@ -253,26 +249,24 @@ export default function Home() {
     
     if (!ctx) return;
     
-    console.log("오버레이 그리기:", canvas.width, canvas.height); // 디버깅용
-    
-    // 캔버스에 이미지 다시 그리기
+    // 원본 이미지 다시 그리기 (배경 초기화)
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.drawImage(imageRef.current, 0, 0, canvas.width, canvas.height);
     
-    // 전체 화면에 어두운 오버레이 추가
+    // 전체 화면에 반투명 오버레이 추가
     ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     
-    // 선택 영역은 오버레이에서 제외
+    // 선택 영역은 완전 투명하게 (오버레이 제거)
     ctx.clearRect(cropArea.x, cropArea.y, cropArea.width, cropArea.height);
     
     // 크롭 영역에 테두리 추가
-    ctx.strokeStyle = '#2563eb'; // 파란색 테두리
+    ctx.strokeStyle = '#2563eb';
     ctx.lineWidth = 2;
     ctx.strokeRect(cropArea.x, cropArea.y, cropArea.width, cropArea.height);
     
     // 코너 핸들 추가
-    const handleSize = 10;
+    const handleSize = 12; // 핸들 크기 약간 키움
     ctx.fillStyle = 'white';
     
     // 좌상단
@@ -285,6 +279,28 @@ export default function Home() {
     ctx.fillRect(cropArea.x + cropArea.width - handleSize/2, cropArea.y + cropArea.height - handleSize/2, handleSize, handleSize);
   };
   
+  // 마우스/터치 위치가 핸들 위에 있는지 확인
+  const getResizeHandle = (x: number, y: number) => {
+    const handleSize = 14; // 조금 더 큰 영역으로 터치 허용
+    
+    // 각 핸들 위치 확인
+    const topLeft = Math.abs(x - cropArea.x) < handleSize/2 && Math.abs(y - cropArea.y) < handleSize/2;
+    const topRight = Math.abs(x - (cropArea.x + cropArea.width)) < handleSize/2 && Math.abs(y - cropArea.y) < handleSize/2;
+    const bottomLeft = Math.abs(x - cropArea.x) < handleSize/2 && Math.abs(y - (cropArea.y + cropArea.height)) < handleSize/2;
+    const bottomRight = Math.abs(x - (cropArea.x + cropArea.width)) < handleSize/2 && Math.abs(y - (cropArea.y + cropArea.height)) < handleSize/2;
+    
+    if (topLeft) return 'topLeft';
+    if (topRight) return 'topRight';
+    if (bottomLeft) return 'bottomLeft';
+    if (bottomRight) return 'bottomRight';
+    
+    // 영역 내부인지 확인
+    const isInside = x >= cropArea.x && x <= cropArea.x + cropArea.width && 
+                     y >= cropArea.y && y <= cropArea.y + cropArea.height;
+    
+    return isInside ? 'inside' : null;
+  };
+  
   // 캔버스에 크롭 영역 그리기
   useEffect(() => {
     if (isEditing && editCanvasRef.current && cropArea.width > 0 && imageRef.current) {
@@ -295,12 +311,16 @@ export default function Home() {
   // 마우스 이벤트 핸들러
   const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
     if (!editCanvasRef.current) return;
-    e.preventDefault(); // 기본 동작 방지
+    e.preventDefault();
     
     const canvas = editCanvasRef.current;
     const rect = canvas.getBoundingClientRect();
     const x = (e.clientX - rect.left) * (canvas.width / rect.width);
     const y = (e.clientY - rect.top) * (canvas.height / rect.height);
+    
+    // 클릭한 위치가 핸들 위인지 확인
+    const handle = getResizeHandle(x, y);
+    setResizeMode(handle);
     
     setStartPoint({ x, y });
     setIsDragging(true);
@@ -308,7 +328,7 @@ export default function Home() {
   
   const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
     if (!isDragging || !editCanvasRef.current) return;
-    e.preventDefault(); // 기본 동작 방지
+    e.preventDefault();
     
     const canvas = editCanvasRef.current;
     const rect = canvas.getBoundingClientRect();
@@ -319,27 +339,83 @@ export default function Home() {
     const dx = x - startPoint.x;
     const dy = y - startPoint.y;
     
-    // 새 영역 계산
-    const newX = Math.max(0, Math.min(cropArea.x + dx, canvas.width - cropArea.width));
-    const newY = Math.max(0, Math.min(cropArea.y + dy, canvas.height - cropArea.height));
-    
-    setCropArea(prev => ({
-      ...prev,
-      x: newX,
-      y: newY
-    }));
+    if (resizeMode === 'inside') {
+      // 이동 모드 - 전체 영역 이동
+      const newX = Math.max(0, Math.min(cropArea.x + dx, canvas.width - cropArea.width));
+      const newY = Math.max(0, Math.min(cropArea.y + dy, canvas.height - cropArea.height));
+      
+      setCropArea(prev => ({
+        ...prev,
+        x: newX,
+        y: newY
+      }));
+    } else if (resizeMode) {
+      // 크기 조절 모드
+      let newX = cropArea.x;
+      let newY = cropArea.y;
+      let newWidth = cropArea.width;
+      let newHeight = cropArea.height;
+      
+      // 핸들에 따라 다른 동작
+      if (resizeMode === 'topLeft') {
+        newX = Math.min(cropArea.x + dx, cropArea.x + cropArea.width - 30);
+        newY = Math.min(cropArea.y + dy, cropArea.y + cropArea.height - 30);
+        newWidth = cropArea.width - (newX - cropArea.x);
+        newHeight = cropArea.height - (newY - cropArea.y);
+      } else if (resizeMode === 'topRight') {
+        newY = Math.min(cropArea.y + dy, cropArea.y + cropArea.height - 30);
+        newWidth = Math.max(30, cropArea.width + dx);
+        newHeight = cropArea.height - (newY - cropArea.y);
+      } else if (resizeMode === 'bottomLeft') {
+        newX = Math.min(cropArea.x + dx, cropArea.x + cropArea.width - 30);
+        newWidth = cropArea.width - (newX - cropArea.x);
+        newHeight = Math.max(30, cropArea.height + dy);
+      } else if (resizeMode === 'bottomRight') {
+        newWidth = Math.max(30, cropArea.width + dx);
+        newHeight = Math.max(30, cropArea.height + dy);
+      }
+      
+      // 최대 범위 제한
+      if (newX < 0) {
+        newWidth += newX;
+        newX = 0;
+      }
+      if (newY < 0) {
+        newHeight += newY;
+        newY = 0;
+      }
+      if (newX + newWidth > canvas.width) {
+        newWidth = canvas.width - newX;
+      }
+      if (newY + newHeight > canvas.height) {
+        newHeight = canvas.height - newY;
+      }
+      
+      // 최소 크기 제한
+      newWidth = Math.max(30, newWidth);
+      newHeight = Math.max(30, newHeight);
+      
+      setCropArea({
+        x: newX,
+        y: newY,
+        width: newWidth,
+        height: newHeight
+      });
+    }
     
     setStartPoint({ x, y });
   };
   
   const handleMouseUp = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    e.preventDefault(); // 기본 동작 방지
+    e.preventDefault();
     setIsDragging(false);
+    setResizeMode(null);
   };
   
+  // 터치 이벤트 핸들러 (마우스 이벤트와 유사)
   const handleTouchStart = (e: React.TouchEvent<HTMLCanvasElement>) => {
     if (!editCanvasRef.current || e.touches.length === 0) return;
-    e.preventDefault(); // 기본 동작 방지
+    e.preventDefault();
     
     const canvas = editCanvasRef.current;
     const rect = canvas.getBoundingClientRect();
@@ -347,13 +423,17 @@ export default function Home() {
     const x = (touch.clientX - rect.left) * (canvas.width / rect.width);
     const y = (touch.clientY - rect.top) * (canvas.height / rect.height);
     
+    // 터치한 위치가 핸들 위인지 확인
+    const handle = getResizeHandle(x, y);
+    setResizeMode(handle);
+    
     setStartPoint({ x, y });
     setIsDragging(true);
   };
   
   const handleTouchMove = (e: React.TouchEvent<HTMLCanvasElement>) => {
     if (!isDragging || !editCanvasRef.current || e.touches.length === 0) return;
-    e.preventDefault(); // 기본 동작 방지
+    e.preventDefault();
     
     const canvas = editCanvasRef.current;
     const rect = canvas.getBoundingClientRect();
@@ -365,22 +445,75 @@ export default function Home() {
     const dx = x - startPoint.x;
     const dy = y - startPoint.y;
     
-    // 새 영역 계산
-    const newX = Math.max(0, Math.min(cropArea.x + dx, canvas.width - cropArea.width));
-    const newY = Math.max(0, Math.min(cropArea.y + dy, canvas.height - cropArea.height));
-    
-    setCropArea(prev => ({
-      ...prev,
-      x: newX,
-      y: newY
-    }));
+    if (resizeMode === 'inside') {
+      // 이동 모드 - 전체 영역 이동
+      const newX = Math.max(0, Math.min(cropArea.x + dx, canvas.width - cropArea.width));
+      const newY = Math.max(0, Math.min(cropArea.y + dy, canvas.height - cropArea.height));
+      
+      setCropArea(prev => ({
+        ...prev,
+        x: newX,
+        y: newY
+      }));
+    } else if (resizeMode) {
+      // 크기 조절 모드 - 마우스 이벤트와 동일한 로직
+      let newX = cropArea.x;
+      let newY = cropArea.y;
+      let newWidth = cropArea.width;
+      let newHeight = cropArea.height;
+      
+      if (resizeMode === 'topLeft') {
+        newX = Math.min(cropArea.x + dx, cropArea.x + cropArea.width - 30);
+        newY = Math.min(cropArea.y + dy, cropArea.y + cropArea.height - 30);
+        newWidth = cropArea.width - (newX - cropArea.x);
+        newHeight = cropArea.height - (newY - cropArea.y);
+      } else if (resizeMode === 'topRight') {
+        newY = Math.min(cropArea.y + dy, cropArea.y + cropArea.height - 30);
+        newWidth = Math.max(30, cropArea.width + dx);
+        newHeight = cropArea.height - (newY - cropArea.y);
+      } else if (resizeMode === 'bottomLeft') {
+        newX = Math.min(cropArea.x + dx, cropArea.x + cropArea.width - 30);
+        newWidth = cropArea.width - (newX - cropArea.x);
+        newHeight = Math.max(30, cropArea.height + dy);
+      } else if (resizeMode === 'bottomRight') {
+        newWidth = Math.max(30, cropArea.width + dx);
+        newHeight = Math.max(30, cropArea.height + dy);
+      }
+      
+      // 범위 제한
+      if (newX < 0) {
+        newWidth += newX;
+        newX = 0;
+      }
+      if (newY < 0) {
+        newHeight += newY;
+        newY = 0;
+      }
+      if (newX + newWidth > canvas.width) {
+        newWidth = canvas.width - newX;
+      }
+      if (newY + newHeight > canvas.height) {
+        newHeight = canvas.height - newY;
+      }
+      
+      newWidth = Math.max(30, newWidth);
+      newHeight = Math.max(30, newHeight);
+      
+      setCropArea({
+        x: newX,
+        y: newY,
+        width: newWidth,
+        height: newHeight
+      });
+    }
     
     setStartPoint({ x, y });
   };
   
   const handleTouchEnd = (e: React.TouchEvent<HTMLCanvasElement>) => {
-    e.preventDefault(); // 기본 동작 방지
+    e.preventDefault();
     setIsDragging(false);
+    setResizeMode(null);
   };
   
   // 편집 완료 처리
@@ -529,7 +662,7 @@ export default function Home() {
         {isEditing && image && (
           <div className="fixed inset-0 bg-black z-20 flex flex-col">
             <div className="flex-1 flex items-center justify-center p-4">
-              <div className="relative bg-white rounded-lg overflow-hidden shadow-lg">
+              <div className="relative overflow-hidden">
                 <canvas 
                   ref={editCanvasRef}
                   className="block"
@@ -545,7 +678,7 @@ export default function Home() {
             </div>
             <div className="p-2 bg-gray-900">
               <p className="text-white text-sm mb-2 text-center">
-                선택 영역을 드래그하여 문제 부분만 선택해주세요
+                선택 영역을 드래그하여 위치를 조정하고, 모서리 핸들을 드래그하여 크기를 조절하세요
               </p>
             </div>
             <div className="bg-gray-900 p-4 flex justify-center gap-4">

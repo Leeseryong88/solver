@@ -30,7 +30,7 @@ export default function Home() {
       const imageData = event.target?.result as string;
       
       // 이미지 압축 및 크기 조정
-      const img = new Image();
+      const img = new window.Image(); // window 객체를 사용하여 명시적 타입 제공
       img.onload = () => {
         const canvas = document.createElement('canvas');
         const ctx = canvas.getContext('2d');

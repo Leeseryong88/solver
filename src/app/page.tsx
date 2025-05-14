@@ -162,28 +162,32 @@ export default function Home() {
       // 이미지 로드
       const img = new window.Image();
       img.onload = () => {
-        // 캔버스 크기 설정
-        const containerWidth = canvas.parentElement?.clientWidth || img.width;
-        const containerHeight = canvas.parentElement?.clientHeight || img.height;
+        // 캔버스 크기 설정 - 브라우저 창 크기에 맞게 조정
+        const windowWidth = window.innerWidth;
+        const windowHeight = window.innerHeight * 0.8; // 하단 버튼 영역 제외
         
-        // 이미지와 컨테이너 비율 계산
+        // 이미지와 윈도우 비율 계산
         const imgRatio = img.width / img.height;
-        const containerRatio = containerWidth / containerHeight;
+        const windowRatio = windowWidth / windowHeight;
         
         let drawWidth, drawHeight;
         
-        if (imgRatio > containerRatio) {
+        if (imgRatio > windowRatio) {
           // 이미지가 더 넓은 경우
-          drawWidth = containerWidth;
-          drawHeight = containerWidth / imgRatio;
+          drawWidth = windowWidth * 0.9; // 약간의 여백
+          drawHeight = drawWidth / imgRatio;
         } else {
           // 이미지가 더 높은 경우
-          drawHeight = containerHeight;
-          drawWidth = containerHeight * imgRatio;
+          drawHeight = windowHeight * 0.9; // 약간의 여백
+          drawWidth = drawHeight * imgRatio;
         }
         
+        // 캔버스 크기 설정
         canvas.width = drawWidth;
         canvas.height = drawHeight;
+        
+        // 캔버스 초기화
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
         
         // 이미지 그리기
         ctx.drawImage(img, 0, 0, drawWidth, drawHeight);
@@ -198,61 +202,77 @@ export default function Home() {
         
         // 이미지 참조 저장
         imageRef.current = img;
+        
+        // 크롭 영역 표시 함수 호출
+        drawCropOverlay();
       };
       
       img.src = image;
+      
+      // 이미지 로드 오류 처리
+      img.onerror = () => {
+        console.error('이미지 로드 실패');
+        setError('이미지를 로드하는 데 실패했습니다.');
+        setIsEditing(false);
+      };
     }
   }, [isEditing, image]);
   
+  // 크롭 오버레이 그리기 함수
+  const drawCropOverlay = () => {
+    if (!editCanvasRef.current || !imageRef.current) return;
+    
+    const canvas = editCanvasRef.current;
+    const ctx = canvas.getContext('2d');
+    
+    if (!ctx) return;
+    
+    // 캔버스에 이미지 다시 그리기
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(imageRef.current, 0, 0, canvas.width, canvas.height);
+    
+    // 전체 화면에 어두운 오버레이 추가
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    // 선택 영역은 오버레이에서 제외
+    ctx.clearRect(cropArea.x, cropArea.y, cropArea.width, cropArea.height);
+    
+    // 크롭 영역에 테두리 추가
+    ctx.strokeStyle = '#2563eb'; // 파란색 테두리
+    ctx.lineWidth = 2;
+    ctx.strokeRect(cropArea.x, cropArea.y, cropArea.width, cropArea.height);
+    
+    // 코너 핸들 추가
+    const handleSize = 10;
+    ctx.fillStyle = 'white';
+    
+    // 좌상단
+    ctx.fillRect(cropArea.x - handleSize/2, cropArea.y - handleSize/2, handleSize, handleSize);
+    // 우상단
+    ctx.fillRect(cropArea.x + cropArea.width - handleSize/2, cropArea.y - handleSize/2, handleSize, handleSize);
+    // 좌하단
+    ctx.fillRect(cropArea.x - handleSize/2, cropArea.y + cropArea.height - handleSize/2, handleSize, handleSize);
+    // 우하단
+    ctx.fillRect(cropArea.x + cropArea.width - handleSize/2, cropArea.y + cropArea.height - handleSize/2, handleSize, handleSize);
+  };
+  
   // 캔버스에 크롭 영역 그리기
   useEffect(() => {
-    if (isEditing && editCanvasRef.current && cropArea.width > 0) {
-      const canvas = editCanvasRef.current;
-      const ctx = canvas.getContext('2d');
-      
-      if (!ctx || !imageRef.current) return;
-      
-      // 캔버스 초기화
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      
-      // 이미지 다시 그리기
-      ctx.drawImage(imageRef.current, 0, 0, canvas.width, canvas.height);
-      
-      // 전체 화면에 어두운 오버레이 추가
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-      
-      // 선택 영역은 오버레이에서 제외
-      ctx.clearRect(cropArea.x, cropArea.y, cropArea.width, cropArea.height);
-      
-      // 크롭 영역에 테두리 추가
-      ctx.strokeStyle = '#2563eb'; // 파란색 테두리
-      ctx.lineWidth = 2;
-      ctx.strokeRect(cropArea.x, cropArea.y, cropArea.width, cropArea.height);
-      
-      // 코너 핸들 추가
-      const handleSize = 8;
-      ctx.fillStyle = 'white';
-      
-      // 좌상단
-      ctx.fillRect(cropArea.x - handleSize/2, cropArea.y - handleSize/2, handleSize, handleSize);
-      // 우상단
-      ctx.fillRect(cropArea.x + cropArea.width - handleSize/2, cropArea.y - handleSize/2, handleSize, handleSize);
-      // 좌하단
-      ctx.fillRect(cropArea.x - handleSize/2, cropArea.y + cropArea.height - handleSize/2, handleSize, handleSize);
-      // 우하단
-      ctx.fillRect(cropArea.x + cropArea.width - handleSize/2, cropArea.y + cropArea.height - handleSize/2, handleSize, handleSize);
+    if (isEditing && editCanvasRef.current && cropArea.width > 0 && imageRef.current) {
+      drawCropOverlay();
     }
   }, [isEditing, cropArea]);
   
   // 마우스 이벤트 핸들러
   const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
     if (!editCanvasRef.current) return;
+    e.preventDefault(); // 기본 동작 방지
     
     const canvas = editCanvasRef.current;
     const rect = canvas.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
+    const x = (e.clientX - rect.left) * (canvas.width / rect.width);
+    const y = (e.clientY - rect.top) * (canvas.height / rect.height);
     
     setStartPoint({ x, y });
     setIsDragging(true);
@@ -260,11 +280,12 @@ export default function Home() {
   
   const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
     if (!isDragging || !editCanvasRef.current) return;
+    e.preventDefault(); // 기본 동작 방지
     
     const canvas = editCanvasRef.current;
     const rect = canvas.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
+    const x = (e.clientX - rect.left) * (canvas.width / rect.width);
+    const y = (e.clientY - rect.top) * (canvas.height / rect.height);
     
     // 시작점과 현재 위치의 차이 계산
     const dx = x - startPoint.x;
@@ -283,7 +304,54 @@ export default function Home() {
     setStartPoint({ x, y });
   };
   
-  const handleMouseUp = () => {
+  const handleMouseUp = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    e.preventDefault(); // 기본 동작 방지
+    setIsDragging(false);
+  };
+  
+  const handleTouchStart = (e: React.TouchEvent<HTMLCanvasElement>) => {
+    if (!editCanvasRef.current || e.touches.length === 0) return;
+    e.preventDefault(); // 기본 동작 방지
+    
+    const canvas = editCanvasRef.current;
+    const rect = canvas.getBoundingClientRect();
+    const touch = e.touches[0];
+    const x = (touch.clientX - rect.left) * (canvas.width / rect.width);
+    const y = (touch.clientY - rect.top) * (canvas.height / rect.height);
+    
+    setStartPoint({ x, y });
+    setIsDragging(true);
+  };
+  
+  const handleTouchMove = (e: React.TouchEvent<HTMLCanvasElement>) => {
+    if (!isDragging || !editCanvasRef.current || e.touches.length === 0) return;
+    e.preventDefault(); // 기본 동작 방지
+    
+    const canvas = editCanvasRef.current;
+    const rect = canvas.getBoundingClientRect();
+    const touch = e.touches[0];
+    const x = (touch.clientX - rect.left) * (canvas.width / rect.width);
+    const y = (touch.clientY - rect.top) * (canvas.height / rect.height);
+    
+    // 시작점과 현재 위치의 차이 계산
+    const dx = x - startPoint.x;
+    const dy = y - startPoint.y;
+    
+    // 새 영역 계산
+    const newX = Math.max(0, Math.min(cropArea.x + dx, canvas.width - cropArea.width));
+    const newY = Math.max(0, Math.min(cropArea.y + dy, canvas.height - cropArea.height));
+    
+    setCropArea(prev => ({
+      ...prev,
+      x: newX,
+      y: newY
+    }));
+    
+    setStartPoint({ x, y });
+  };
+  
+  const handleTouchEnd = (e: React.TouchEvent<HTMLCanvasElement>) => {
+    e.preventDefault(); // 기본 동작 방지
     setIsDragging(false);
   };
   
@@ -432,20 +500,23 @@ export default function Home() {
         {/* 이미지 편집 뷰 */}
         {isEditing && image && (
           <div className="fixed inset-0 bg-black z-20 flex flex-col">
-            <div className="flex-1 relative">
+            <div className="flex-1 relative flex items-center justify-center">
               <canvas 
                 ref={editCanvasRef}
-                className="absolute inset-0 w-full h-full object-contain"
+                className="max-w-full max-h-full object-contain"
                 onMouseDown={handleMouseDown}
                 onMouseMove={handleMouseMove}
                 onMouseUp={handleMouseUp}
                 onMouseLeave={handleMouseUp}
+                onTouchStart={handleTouchStart}
+                onTouchMove={handleTouchMove}
+                onTouchEnd={handleTouchEnd}
               />
-              <div className="absolute bottom-4 left-4 right-4 flex justify-center gap-4">
-                <p className="text-white text-sm mb-2 text-center">
-                  선택 영역을 드래그하여 문제 부분만 선택해주세요
-                </p>
-              </div>
+            </div>
+            <div className="p-2 bg-black">
+              <p className="text-white text-sm mb-2 text-center">
+                선택 영역을 드래그하여 문제 부분만 선택해주세요
+              </p>
             </div>
             <div className="bg-black p-4 flex justify-center gap-4">
               <button

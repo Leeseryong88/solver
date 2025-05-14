@@ -46,7 +46,7 @@ export default function Home() {
         videoRef.current.srcObject = stream;
         videoRef.current.play();
       }
-    } catch (err) {
+    } catch (_error) {
       setError("카메라 접근에 실패했습니다. 권한을 확인해주세요.");
       setUsingCamera(false);
     }
@@ -133,8 +133,8 @@ export default function Home() {
 
       const data = await response.json();
       setSolution(data.solution);
-    } catch (err) {
-      console.error("문제 분석 중 오류:", err);
+    } catch (_error) {
+      console.error("문제 분석 중 오류:", _error);
       setError("문제 분석 중 오류가 발생했습니다. 다시 시도해주세요.");
     } finally {
       setLoading(false);
@@ -186,11 +186,17 @@ export default function Home() {
             <div className="p-4">
               <p className="text-sm font-medium text-gray-700 mb-2">미리보기</p>
               <div className="aspect-[3/4] w-full rounded-md overflow-hidden bg-gray-100 relative">
-                <img
-                  src={image}
-                  alt="문제 이미지"
-                  className="absolute w-full h-full object-contain"
-                />
+                <div className="absolute inset-0 flex items-center justify-center">
+                  {image && (
+                    <Image
+                      src={image}
+                      alt="문제 이미지"
+                      fill
+                      className="object-contain"
+                      unoptimized
+                    />
+                  )}
+                </div>
               </div>
               <div className="mt-4 flex flex-col gap-2">
                 <button
